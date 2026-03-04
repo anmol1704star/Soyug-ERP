@@ -4,8 +4,9 @@ import { Plus, CheckCircle, Clock, FileText } from 'lucide-react';
 import { Contract } from '../types';
 
 export default function ContractsSheet() {
-  const { contracts, updateContractStatus, addContract, getPendingWt } = useApp();
+  const { contracts, updateContractStatus, updateContractExpiry, addContract, getPendingWt } = useApp();
   const [showModal, setShowModal] = useState(false);
+  const [extendContract, setExtendContract] = useState<Contract | null>(null);
 
   const handleStatusToggle = (poNo: string, currentStatus: string) => {
     updateContractStatus(poNo, currentStatus === 'Pending' ? 'COMPLETE' : 'Pending');
@@ -88,12 +89,20 @@ export default function ContractsSheet() {
                       </div>
                     </td>
                     <td>
-                      <button
-                        onClick={() => handleStatusToggle(contract.poNo, contract.status)}
-                        className="text-[10px] font-bold uppercase text-blue-600 hover:text-blue-800"
-                      >
-                        Toggle
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setExtendContract(contract)}
+                          className="text-[10px] font-bold uppercase text-zinc-500 hover:text-zinc-800"
+                        >
+                          Extend
+                        </button>
+                        <button
+                          onClick={() => handleStatusToggle(contract.poNo, contract.status)}
+                          className="text-[10px] font-bold uppercase text-blue-600 hover:text-blue-800"
+                        >
+                          Toggle
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -113,9 +122,28 @@ export default function ContractsSheet() {
         </div>
       </div>
 
+      {extendContract && (
+        <ExtendContractModal contract={extendContract} onClose={() => setExtendContract(null)} onExtend={updateContractExpiry} />
+      )}
       {showModal && (
         <AddContractModal onClose={() => setShowModal(false)} onAdd={addContract} />
       )}
+    </div>
+  );
+}
+
+function ExtendContractModal({ contract, onClose, onExtend }: { contract: Contract, onClose: () => void, onExtend: (poNo: string, newDateTo: string) => void }) {
+  const [newDate, setNewDate] = useState(contract.dateTo);
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h3 className="text-lg font-semibold mb-4">Extend Expiry: {contract.poNo}</h3>
+        <input type="date" className="w-full border rounded-lg px-3 py-2 mb-4" value={newDate} onChange={e => setNewDate(e.target.value)} />
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2 text-sm text-zinc-700 hover:bg-zinc-100 rounded-lg">Cancel</button>
+          <button onClick={() => { onExtend(contract.poNo, newDate); onClose(); }} className="flex-1 py-2 text-sm text-white bg-zinc-900 rounded-lg">Extend</button>
+        </div>
+      </div>
     </div>
   );
 }

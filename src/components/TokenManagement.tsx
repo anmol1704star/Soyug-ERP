@@ -1,11 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, Truck, Calendar, CheckCircle2, AlertCircle, Search } from 'lucide-react';
-import { Contract } from '../types';
+import { Plus, Truck, Calendar, CheckCircle2, AlertCircle, Search, Settings, FileText, Trash2 } from 'lucide-react';
+import { Contract, Token } from '../types';
+import TransporterVoucher from './TransporterVoucher';
 
 export default function TokenManagement() {
-  const { tokens, contracts, addToken, getBestBargainsForParty } = useApp();
+  const { tokens, contracts, addToken, getBestBargainsForParty, deleteToken } = useApp();
   const [showModal, setShowModal] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<Token | null>(null);
+  const [selectedVoucherToken, setSelectedVoucherToken] = useState<Token | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredTokens = tokens.filter(t => 
@@ -56,7 +59,19 @@ export default function TokenManagement() {
                   {token.status.replace('_', ' ')}
                 </span>
               </div>
-              <Calendar className="w-4 h-4 text-zinc-400" />
+              <div className="flex gap-1">
+                {token.status === 'Completed' && (
+                  <button onClick={() => setSelectedVoucherToken(token)} className="p-1 hover:bg-zinc-100 rounded text-blue-600">
+                    <FileText className="w-4 h-4" />
+                  </button>
+                )}
+                <button onClick={() => setSelectedToken(token)} className="p-1 hover:bg-zinc-100 rounded">
+                  <Settings className="w-4 h-4 text-zinc-400" />
+                </button>
+                <button onClick={() => deleteToken(token.tokenNo)} className="p-1 hover:bg-zinc-100 rounded text-red-500">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             
             <div className="space-y-2">
@@ -91,15 +106,67 @@ export default function TokenManagement() {
       {showModal && (
         <IssueTokenModal onClose={() => setShowModal(false)} />
       )}
+      {selectedToken && (
+        <TokenWorkflowModal token={selectedToken} onClose={() => setSelectedToken(null)} />
+      )}
+      {selectedVoucherToken && (
+        <TransporterVoucher token={selectedVoucherToken} onClose={() => setSelectedVoucherToken(null)} />
+      )}
+    </div>
+  );
+}
+
+function TokenWorkflowModal({ token, onClose }: { token: Token, onClose: () => void }) {
+  const { updateToken } = useApp();
+  const [weight, setWeight] = useState('');
+
+  const handleUpdate = (status: Token['status'], updates: Partial<Token> = {}) => {
+    updateToken(token.tokenNo, { status, ...updates });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <h3 className="text-lg font-semibold mb-4">Manage Token #{token.tokenNo}</h3>
+        <div className="space-y-4">
+          <div className="text-sm text-zinc-600">Current Status: <span className="font-bold text-zinc-900">{token.status}</span></div>
+          
+          {token.status === 'Issued' && (
+            <div className="space-y-2">
+              <input type="number" placeholder="Enter Weight 1 (MT)" className="w-full border rounded-lg px-3 py-2" value={weight} onChange={e => setWeight(e.target.value)} />
+              <button onClick={() => handleUpdate('Weight1', { weight1: parseFloat(weight) })} className="w-full bg-zinc-900 text-white py-2 rounded-lg">Record Weight 1</button>
+            </div>
+          )}
+          {token.status === 'Weight1' && (
+            <button onClick={() => handleUpdate('Unloaded')} className="w-full bg-zinc-900 text-white py-2 rounded-lg">Confirm Unloaded</button>
+          )}
+          {token.status === 'Unloaded' && (
+            <div className="space-y-2">
+              <input type="number" placeholder="Enter Weight 2 (MT)" className="w-full border rounded-lg px-3 py-2" value={weight} onChange={e => setWeight(e.target.value)} />
+              <button onClick={() => handleUpdate('Weight2', { weight2: parseFloat(weight) })} className="w-full bg-zinc-900 text-white py-2 rounded-lg">Record Weight 2</button>
+            </div>
+          )}
+          {token.status === 'Weight2' && (
+            <button onClick={() => handleUpdate('QC_Pending')} className="w-full bg-zinc-900 text-white py-2 rounded-lg">Send to QC</button>
+          )}
+          {token.status === 'QC_Pending' && (
+            <button onClick={() => handleUpdate('Completed')} className="w-full bg-emerald-600 text-white py-2 rounded-lg">Complete Token</button>
+          )}
+        </div>
+        <button onClick={onClose} className="mt-4 w-full text-zinc-500 text-sm">Cancel</button>
+      </div>
     </div>
   );
 }
 
 function IssueTokenModal({ onClose }: { onClose: () => void }) {
-  const { contracts, addToken, getBestBargainsForParty } = useApp();
+  const { contracts, addToken, getBestBargainsForParty, transporters, freightRates } = useApp();
   const [truckNo, setTruckNo] = useState('');
   const [selectedParty, setSelectedParty] = useState('');
   const [selectedBargains, setSelectedBargains] = useState<string[]>([]);
+  const [selectedTransporter, setSelectedTransporter] = useState('');
+  const [selectedOrigin, setSelectedOrigin] = useState('');
 
   const parties = useMemo(() => {
     const p = new Set<string>();
@@ -116,14 +183,16 @@ function IssueTokenModal({ onClose }: { onClose: () => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!truckNo || !selectedParty || selectedBargains.length === 0) return;
+    if (!truckNo || !selectedParty || selectedBargains.length === 0 || !selectedTransporter || !selectedOrigin) return;
 
     addToken({
       date: new Date().toISOString().split('T')[0],
       truckNo: truckNo.toUpperCase(),
       party: selectedParty,
-      status: 'QC_Pending',
-      selectedBargains
+      status: 'Issued',
+      selectedBargains,
+      transporterId: selectedTransporter,
+      origin: selectedOrigin
     });
     onClose();
   };
@@ -171,6 +240,30 @@ function IssueTokenModal({ onClose }: { onClose: () => void }) {
                 <option value="">-- Select Party --</option>
                 {parties.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 mb-1">Select Transporter</label>
+              <select 
+                required 
+                className="w-full border border-zinc-300 rounded-lg px-3 py-2 text-sm bg-white"
+                value={selectedTransporter}
+                onChange={e => {
+                  setSelectedTransporter(e.target.value);
+                  const t = transporters.find(tr => tr.id === e.target.value);
+                  if (t) setSelectedOrigin(t.origin);
+                }}
+              >
+                <option value="">-- Select Transporter --</option>
+                {transporters.map(t => <option key={t.id} value={t.id}>{t.name} ({t.origin})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 mb-1">Origin</label>
+              <input 
+                readOnly
+                className="w-full border border-zinc-300 rounded-lg px-3 py-2 text-sm bg-zinc-100"
+                value={selectedOrigin}
+              />
             </div>
           </div>
 

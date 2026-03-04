@@ -1,22 +1,28 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Contract, Receipt, Token } from '../types';
+import { Contract, Receipt, Token, Transporter, FreightRate } from '../types';
 
 interface AppContextType {
   contracts: Contract[];
   receipts: Receipt[];
   tokens: Token[];
+  transporters: Transporter[];
+  freightRates: FreightRate[];
   addContract: (contract: Contract) => void;
   updateContractStatus: (poNo: string, status: 'Pending' | 'COMPLETE') => void;
+  updateContractExpiry: (poNo: string, newDateTo: string) => void;
   addReceipt: (receipt: Receipt) => void;
   addToken: (token: Omit<Token, 'tokenNo'>) => number;
-  updateTokenStatus: (tokenNo: number, status: Token['status']) => void;
+  updateToken: (tokenNo: number, updates: Partial<Token>) => void;
+  updateTokenStatus: (tokenNo: number, status: string) => void;
   getPendingWt: (poNo: string) => number;
   getBestBargainsForParty: (party: string, currentDate: string) => Contract[];
+  addTransporter: (transporter: Transporter) => void;
+  deleteToken: (tokenNo: number) => void;
+  calculateTransporterPayment: (token: Token) => { freight: number, rebate: number, totalPayable: number };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Dummy entries from the provided CSV
 const initialContracts: Contract[] = [
   { poNo: 'ITAW-23/01', date: '2024-01-27', party: 'Itawa Mandi', place: 'Itawa(RJ)', broker: 'Direct', qtyMin: 27.854, qtyMax: 27.854, rate: 46757.81, dateFrom: '2024-01-27', dateTo: '2024-02-03', delTerm: 'Ex', paymentTerms: 'Payment on 04 Days', qualityCondition: 'Non-Claim', billOn: 'Net', material: 'Soya Seed', status: 'COMPLETE' },
   { poNo: 'ITAW-23/02', date: '2024-01-29', party: 'Itawa Mandi', place: 'Itawa(RJ)', broker: 'Direct', qtyMin: 9.570, qtyMax: 9.570, rate: 46247.65, dateFrom: '2024-01-29', dateTo: '2024-02-05', delTerm: 'Ex', paymentTerms: 'Payment on 04 Days', qualityCondition: 'Non-Claim', billOn: 'Net', material: 'Soya Seed', status: 'Pending' },
@@ -50,10 +56,20 @@ const initialContracts: Contract[] = [
   { poNo: 'SS-24/2808', date: '2025-03-03', party: 'Dug Depo', place: 'Dug(RJ)', broker: 'Dalal Nakoda Canvassing', qtyMin: 40.000, qtyMax: 40.000, rate: 33000.00, dateFrom: '2025-03-03', dateTo: '2025-03-10', delTerm: 'FOR', paymentTerms: 'Payment on 04 Days', qualityCondition: 'Claim', billOn: 'Gross', material: 'Soya Seed', status: 'Pending' },
 ];
 
+const initialFreightRates: FreightRate[] = [
+  { origin: 'Bundi', ratePerMt: 350 },
+  { origin: 'Kota', ratePerMt: 550 },
+  { origin: 'Asnawar', ratePerMt: 750 },
+  { origin: 'Nimbahera', ratePerMt: 900 },
+  { origin: 'Dei', ratePerMt: 950 },
+];
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [contracts, setContracts] = useState<Contract[]>(initialContracts);
+  const [contracts, setContracts] = useState<Contract[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [tokens, setTokens] = useState<Token[]>([]);
+  const [transporters, setTransporters] = useState<Transporter[]>([]);
+  const [freightRates] = useState<FreightRate[]>(initialFreightRates);
 
   const getPendingWt = (poNo: string) => {
     const contract = contracts.find(c => c.poNo === poNo);
@@ -70,6 +86,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setContracts(prev => prev.map(c => c.poNo === poNo ? { ...c, status } : c));
   };
 
+  const updateContractExpiry = (poNo: string, newDateTo: string) => {
+    setContracts(prev => prev.map(c => c.poNo === poNo ? { ...c, dateTo: newDateTo } : c));
+  };
+
   const addReceipt = (receipt: Receipt) => {
     setReceipts(prev => [receipt, ...prev]);
   };
@@ -81,32 +101,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return nextTokenNo;
   };
 
-  const updateTokenStatus = (tokenNo: number, status: Token['status']) => {
-    setTokens(prev => prev.map(t => t.tokenNo === tokenNo ? { ...t, status } : t));
+  const updateToken = (tokenNo: number, updates: Partial<Token>) => {
+    setTokens(prev => prev.map(t => t.tokenNo === tokenNo ? { ...t, ...updates } : t));
+  };
+
+  const updateTokenStatus = (tokenNo: number, status: string) => {
+    setTokens(prev => prev.map(t => t.tokenNo === tokenNo ? { ...t, status: status as any } : t));
+  };
+
+  const deleteToken = (tokenNo: number) => {
+    setTokens(prev => prev.filter(t => t.tokenNo !== tokenNo));
+  };
+
+  const addTransporter = (transporter: Transporter) => {
+    setTransporters(prev => [...prev, transporter]);
   };
 
   const getBestBargainsForParty = (party: string, currentDate: string) => {
     const partyContracts = contracts.filter(c => c.party === party && c.status === 'Pending');
-    
-    // Logic: 
-    // 1. Separate valid and expired
-    // 2. If valid exist, show them.
-    // 3. If only expired exist, select the one with lowest rate.
-    
     const valid = partyContracts.filter(c => new Date(c.dateTo) >= new Date(currentDate));
     const expired = partyContracts.filter(c => new Date(c.dateTo) < new Date(currentDate));
 
-    if (valid.length > 0) {
-      return valid;
-    }
-
+    if (valid.length > 0) return valid;
     if (expired.length > 0) {
-      // Select the one with lowest rate
       const cheapest = expired.reduce((prev, curr) => prev.rate < curr.rate ? prev : curr);
       return [cheapest];
     }
-
     return [];
+  };
+
+  const calculateTransporterPayment = (token: Token) => {
+    const freightRate = freightRates.find(f => f.origin === token.origin)?.ratePerMt || 0;
+    const netWt = (token.weight1 || 0) - (token.weight2 || 0);
+    const freight = netWt * freightRate;
+    
+    // Find receipt to get actual received weight
+    const receipt = receipts.find(r => r.tokenNo === token.tokenNo);
+    const recdWt = receipt?.recdWt || netWt;
+    const shortage = Math.max(0, netWt - recdWt);
+    
+    // Shortage allowed is 0.2% of netWt (unload weight)
+    const allowedShortage = netWt * 0.002;
+    const excessShortage = Math.max(0, shortage - allowedShortage);
+    
+    // Deduct rebate based on contract rate (using first bargain rate as placeholder)
+    const contract = contracts.find(c => token.selectedBargains.includes(c.poNo));
+    const rate = contract?.rate || 0;
+    const rebate = excessShortage * rate;
+
+    return {
+      freight,
+      rebate,
+      totalPayable: freight - rebate
+    };
   };
 
   return (
@@ -114,13 +161,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       contracts, 
       receipts, 
       tokens, 
+      transporters,
+      freightRates,
       addContract, 
       updateContractStatus, 
+      updateContractExpiry,
       addReceipt, 
       addToken, 
-      updateTokenStatus, 
+      updateToken,
+      updateTokenStatus,
+      deleteToken,
       getPendingWt,
-      getBestBargainsForParty
+      getBestBargainsForParty,
+      addTransporter,
+      calculateTransporterPayment
     }}>
       {children}
     </AppContext.Provider>

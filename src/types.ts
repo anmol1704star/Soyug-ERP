@@ -17,13 +17,30 @@ export interface Contract {
   status: 'Pending' | 'COMPLETE';
 }
 
+export interface Transporter {
+  id: string;
+  name: string;
+  bankName: string;
+  accountNo: string;
+  origin: string;
+}
+
+export interface FreightRate {
+  origin: string;
+  ratePerMt: number;
+}
+
 export interface Token {
   tokenNo: number;
   date: string;
   truckNo: string;
   party: string;
-  status: 'Draft' | 'QC_Pending' | 'Completed';
+  transporterId: string;
+  origin: string;
+  status: 'Issued' | 'Weight1' | 'Unloaded' | 'Weight2' | 'QC_Pending' | 'Completed';
   selectedBargains: string[]; // poNo list
+  weight1?: number;
+  weight2?: number;
 }
 
 export interface Receipt {
@@ -41,4 +58,5 @@ export interface Receipt {
   claimWt: number;
   netWt: number;
   value: number;
+  transporterName: string;
 }

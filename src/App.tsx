@@ -3,10 +3,11 @@ import { AppProvider } from './context/AppContext';
 import ContractsSheet from './components/ContractsSheet';
 import ReceiptQC from './components/ReceiptQC';
 import TokenManagement from './components/TokenManagement';
-import { FileText, ClipboardCheck, LayoutDashboard, Ticket, Factory } from 'lucide-react';
+import TransporterManagement from './components/TransporterManagement';
+import { FileText, ClipboardCheck, LayoutDashboard, Ticket, Factory, User } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'tokens' | 'contracts' | 'receipts'>('tokens');
+  const [activeTab, setActiveTab] = useState<'tokens' | 'contracts' | 'receipts' | 'transporters'>('tokens');
 
   return (
     <AppProvider>
@@ -62,6 +63,17 @@ export default function App() {
               <ClipboardCheck className="w-4 h-4" />
               Receipt & QC
             </button>
+            <button
+              onClick={() => setActiveTab('transporters')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === 'transporters' 
+                  ? 'bg-amber-500 text-zinc-900 shadow-lg shadow-amber-500/20' 
+                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              Transporter KYC
+            </button>
             
             <div className="px-4 py-2 mt-6 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Master Data</div>
             <button
@@ -104,6 +116,7 @@ export default function App() {
             {activeTab === 'tokens' && <TokenManagement />}
             {activeTab === 'contracts' && <ContractsSheet />}
             {activeTab === 'receipts' && <ReceiptQC />}
+            {activeTab === 'transporters' && <TransporterManagement />}
           </main>
         </div>
       </div>

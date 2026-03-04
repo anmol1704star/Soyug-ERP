@@ -5,7 +5,7 @@ import { Receipt, Token } from '../types';
 import { calculateReceipt } from '../utils/calculations';
 
 export default function ReceiptQC() {
-  const { receipts, tokens, addReceipt, updateTokenStatus } = useApp();
+  const { receipts, tokens, transporters, addReceipt, updateTokenStatus } = useApp();
   const [showModal, setShowModal] = useState(false);
 
   return (
@@ -32,6 +32,7 @@ export default function ReceiptQC() {
                 <th>Token #</th>
                 <th>Receipt ID</th>
                 <th>Truck No</th>
+                <th>Transporter</th>
                 <th>PO No</th>
                 <th>Date</th>
                 <th>Recd Wt (MT)</th>
@@ -50,6 +51,7 @@ export default function ReceiptQC() {
                   </td>
                   <td className="font-medium text-zinc-900">{receipt.id}</td>
                   <td className="font-bold text-zinc-900">{receipt.truckNo}</td>
+                  <td className="text-zinc-600 font-medium">{receipt.transporterName}</td>
                   <td className="text-blue-600 font-medium">{receipt.poNo}</td>
                   <td>{receipt.date}</td>
                   <td className="font-mono-num">{receipt.recdWt.toFixed(3)}</td>
@@ -62,7 +64,7 @@ export default function ReceiptQC() {
               ))}
               {receipts.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-zinc-500">
+                  <td colSpan={10} className="text-center py-12 text-zinc-500">
                     <div className="flex flex-col items-center gap-2">
                       <Ticket className="w-8 h-8 text-zinc-200" />
                       <p>No QC receipts found. Issue a token and perform QC to see results here.</p>
@@ -91,7 +93,7 @@ function AddReceiptModal({ onClose, onAdd, onCompleteToken }: {
   onAdd: (r: Receipt) => void,
   onCompleteToken: (tokenNo: number) => void
 }) {
-  const { contracts, tokens, getPendingWt } = useApp();
+  const { contracts, tokens, transporters, getPendingWt } = useApp();
   
   const [selectedTokenNo, setSelectedTokenNo] = useState<number | ''>('');
   
@@ -159,6 +161,8 @@ function AddReceiptModal({ onClose, onAdd, onCompleteToken }: {
     const d = Number(damage);
 
     const baseId = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const transporter = transporters.find(t => t.id === selectedToken.transporterId);
+    const transporterName = transporter ? transporter.name : 'Unknown';
 
     splitData.forEach((data, index) => {
       onAdd({
@@ -172,6 +176,7 @@ function AddReceiptModal({ onClose, onAdd, onCompleteToken }: {
         moisture: m,
         fm: f,
         damage: d,
+        transporterName,
         ...data.calc
       });
     });
