@@ -1,0 +1,5 @@
+{
+  "name": "Soyug ERP",
+  "description": "Purchase module and QC receipt tracking for Soya Seed and related materials.",
+  "requestFramePermissions": []
+}
